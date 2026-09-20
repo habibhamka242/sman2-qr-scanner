@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#102a43">
+<title>Scanner QR • SMAN 2 Payakumbuh</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#f4f7fb;color:#152536;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}body{min-height:100vh}.wrap{width:min(560px,100%);margin:auto;padding:12px}.top{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.97);backdrop-filter:blur(12px);border-bottom:1px solid #e3eaf2;padding:12px 14px;margin:-12px -12px 12px;display:flex;align-items:center;gap:10px}.logo{width:42px;height:42px;border-radius:13px;background:#102a43;color:#fff;display:grid;place-items:center;font-weight:900}.title{font-weight:900}.sub{font-size:11px;color:#718096}.card{background:#fff;border:1px solid #e3eaf2;border-radius:20px;padding:15px;box-shadow:0 12px 35px rgba(16,42,67,.08)}#reader{width:100%;overflow:hidden;border-radius:18px;background:#0b1220;min-height:320px}.status{margin:10px 0;padding:10px 12px;border-radius:12px;background:#edf4ff;color:#0c5bb7;font-size:13px;font-weight:750}.status.ok{background:#dcfce7;color:#166534}.status.err{background:#fee2e2;color:#991b1b}.status.warn{background:#fff7ed;color:#9a3412}.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.btn{border:0;border-radius:12px;padding:12px;font-weight:850;background:#edf4ff;color:#0c5bb7;cursor:pointer}.btn:disabled{opacity:.45;cursor:not-allowed}.primary{background:#1565d8;color:#fff}.dark{background:#102a43;color:#fff}.danger{background:#fee2e2;color:#991b1b}.info{font-size:12px;color:#718096;line-height:1.6;margin-top:10px}.result{margin-top:12px}.student{border-left:5px solid #16a34a;background:#f0fdf4;padding:13px;border-radius:12px}.student.err{border-left-color:#dc2626;background:#fff1f2;color:#991b1b}.student b{font-size:18px}.kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.kv div{background:#f8fafc;padding:9px;border-radius:10px}.kv small{display:block;color:#718096;font-size:10px;font-weight:800}.kv b{font-size:13px}.session{font-size:12px;background:#f8fafc;padding:10px;border-radius:12px;margin-top:10px}.scan-frame{position:relative}.scan-frame:after{content:"";position:absolute;left:15%;right:15%;top:50%;height:2px;background:#22c55e;box-shadow:0 0 12px #22c55e;opacity:.75;pointer-events:none}.help{margin-top:12px;padding:12px;border-radius:12px;background:#f8fafc;font-size:12px;line-height:1.65;color:#526273}.help b{color:#152536}@media(max-width:420px){.wrap{padding:10px}.top{margin:-10px -10px 10px}#reader{min-height:290px}.btns{grid-template-columns:1fr}.kv{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><div class="logo">QR</div><div><div class="title">Scanner QR Absensi</div><div class="sub" id="schoolName">SMAN 2 PAYAKUMBUH</div></div></div>
+  <div class="card">
+    <div id="status" class="status">Tekan “Mulai Kamera” untuk mengizinkan kamera.</div>
+    <div id="sessionInfo" class="session">Memuat data sesi...</div>
+    <div class="scan-frame"><div id="reader"></div></div>
+    <div class="btns">
+      <button id="startBtn" class="btn primary" onclick="startCamera()">📷 Mulai Kamera</button>
+      <button id="switchBtn" class="btn" onclick="switchCamera()">🔄 Ganti Kamera</button>
+      <button id="flashBtn" class="btn" onclick="toggleFlash()" disabled>🔦 Flash</button>
+      <button class="btn danger" onclick="stopCamera()">⏹ Stop</button>
+    </div>
+    <div id="gps" class="info">📍 GPS: mengambil lokasi saat kamera dimulai...</div>
+    <div id="result" class="result"></div>
+    <div class="help"><b>Scanner V7:</b> kamera berjalan pada halaman HTTPS terpisah, bukan di iframe Google Apps Script. Setelah QR terbaca, data dikirim kembali ke aplikasi utama untuk validasi dan pencatatan absensi.</div>
+  </div>
+</div>
+<script>
+'use strict';
+const P=new URLSearchParams(location.search);
+const CFG={jadwalId:P.get('jadwalId')||'',userId:P.get('userId')||'',userName:P.get('userName')||'',role:P.get('role')||'',sessionId:P.get('sessionId')||'',school:P.get('school')||'SMAN 2 PAYAKUMBUH'};
+let scanner=null,facing='environment',torch=false,busy=false,lastQr='',lastAt=0,gps=null;
+const $=id=>document.getElementById(id);
+function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function setStatus(msg,type=''){ $('status').textContent=msg; $('status').className='status '+type; }
+function getGps(){
+  if(!navigator.geolocation){$('gps').textContent='📍 GPS tidak didukung browser.';return;}
+  $('gps').textContent='📍 GPS: meminta izin lokasi...';
+  navigator.geolocation.getCurrentPosition(p=>{gps={latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy};$('gps').textContent=`📍 GPS aktif: ${gps.latitude.toFixed(6)}, ${gps.longitude.toFixed(6)} • ±${Math.round(gps.accuracy)}m`;},e=>{$('gps').textContent='📍 GPS: '+e.message;},{enableHighAccuracy:true,timeout:12000,maximumAge:5000});
+}
+function video(){return document.querySelector('#reader video');}
+function track(){const v=video();return v&&v.srcObject&&v.srcObject.getVideoTracks?v.srcObject.getVideoTracks()[0]:null;}
+function updateFlash(){try{const t=track(),c=t&&t.getCapabilities?t.getCapabilities():{};$('flashBtn').disabled=!c.torch;$('flashBtn').textContent=torch?'🔦 Flash ON':'🔦 Flash';}catch(e){$('flashBtn').disabled=true;}}
+function postResult(ok,qr,error){try{if(window.opener&&!window.opener.closed)window.opener.postMessage({type:'SMAN2_QR_RESULT_V7',ok,qr:qr||'',error:error||''},'*');}catch(e){}}
+async function startCamera(){
+  if(!CFG.jadwalId||!CFG.userId||!CFG.sessionId){setStatus('Data sesi tidak lengkap. Tutup scanner lalu buka kembali dari aplikasi utama.','err');return;}
+  try{
+    await stopCamera(false);
+    $('result').innerHTML='';
+    setStatus('Meminta izin kamera dari browser...');
+    getGps();
+    scanner=new Html5Qrcode('reader');
+    await scanner.start({facingMode:{ideal:facing}},{fps:10,qrbox:{width:Math.min(280,Math.floor(window.innerWidth*.62)),height:Math.min(280,Math.floor(window.innerWidth*.62))},aspectRatio:1},onQr,()=>{});
+    updateFlash();
+    setStatus(facing==='environment'?'Kamera belakang aktif. Arahkan QR ke kotak pemindai.':'Kamera depan aktif. Arahkan QR ke kotak pemindai.','ok');
+  }catch(e){
+    const n=e&&e.name||'',m=e&&e.message||String(e);let msg=m;
+    if(n==='NotAllowedError'||/permission denied|not allowed/i.test(m))msg='Izin kamera ditolak. Izinkan kamera untuk halaman scanner ini melalui ikon kamera di address bar, lalu tekan Coba Lagi.';
+    else if(n==='NotFoundError'||/camera.*not found/i.test(m))msg='Kamera tidak ditemukan pada perangkat ini.';
+    else if(n==='NotReadableError'||/could not start video source/i.test(m))msg='Kamera sedang dipakai aplikasi lain. Tutup aplikasi kamera lain lalu coba lagi.';
+    else if(n==='OverconstrainedError')msg='Kamera yang dipilih tidak tersedia. Tekan Ganti Kamera.';
+    else if(location.protocol!=='https:')msg='Scanner harus dibuka melalui HTTPS.';
+    setStatus('Kamera gagal: '+msg,'err');
+  }
+}
+async function stopCamera(show=true){if(scanner){try{await scanner.stop();}catch(e){}try{await scanner.clear();}catch(e){}scanner=null;}torch=false;updateFlash();if(show)setStatus('Kamera dihentikan.');}
+async function switchCamera(){facing=facing==='environment'?'user':'environment';await startCamera();}
+async function toggleFlash(){const t=track();try{const c=t&&t.getCapabilities?t.getCapabilities():{};if(!c.torch){setStatus('Flash tidak didukung kamera ini.','warn');return;}torch=!torch;await t.applyConstraints({advanced:[{torch:torch}]});updateFlash();}catch(e){torch=false;updateFlash();setStatus('Flash tidak dapat digunakan pada kamera ini.','err');}}
+async function onQr(raw){const now=Date.now();if(busy||!raw||(raw===lastQr&&now-lastAt<2500))return;lastQr=raw;lastAt=now;busy=true;setStatus('QR terbaca. Mengirim ke aplikasi utama...');$('result').innerHTML='<div class="student"><b>⏳ Memproses QR...</b><div class="small">Menunggu validasi dari aplikasi absensi.</div></div>';postResult(true,raw,'');try{if(navigator.vibrate)navigator.vibrate(100);if(scanner){try{await scanner.pause(true);}catch(e){}}window.opener?.postMessage({type:'SMAN2_QR_SCAN_V7',qr:raw,gps,scannerSessionId:CFG.sessionId},'*');}catch(e){busy=false;setStatus('Gagal mengirim QR ke aplikasi utama.','err');$('result').innerHTML='<div class="student err"><b>❌ '+esc(e.message)+'</b></div>';return;}}
+window.addEventListener('message',async e=>{if(!e.data||e.data.type!=='SMAN2_QR_RESULT_V7')return;if(e.data.ok){setStatus('Absensi berhasil diproses. Scan berikutnya siap.','ok');$('result').innerHTML='<div class="student"><b>✅ Absensi berhasil diproses</b><div class="small">QR: '+esc(e.data.qr||'')+'</div></div>';if(navigator.vibrate)navigator.vibrate([80,50,120]);busy=false;if(scanner){try{await scanner.resume();}catch(x){}}}else{setStatus('QR ditolak oleh aplikasi utama.','err');$('result').innerHTML='<div class="student err"><b>❌ '+esc(e.data.error||'QR tidak dapat diproses.')+'</b></div>';busy=false;if(scanner){try{await scanner.resume();}catch(x){}}}});
+window.addEventListener('load',()=>{ $('schoolName').textContent=CFG.school; $('sessionInfo').textContent=`Jadwal: ${CFG.jadwalId} • Guru: ${CFG.userName} • Sesi: ${CFG.sessionId}`;if(!window.opener)setStatus('Scanner dibuka tanpa aplikasi utama. Buka scanner dari tombol di aplikasi absensi.','warn');});
+window.addEventListener('pagehide',()=>stopCamera(false));
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCamera(false);});
+</script>
+</body>
+</html>
