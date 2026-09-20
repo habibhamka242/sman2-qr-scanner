@@ -105,7 +105,6 @@ window.addEventListener('message',async e=>{
 });
 window.addEventListener('load',()=>{ $('schoolName').textContent=CFG.school; $('sessionInfo').textContent=`Jadwal: ${CFG.jadwalId} • Guru: ${CFG.userName} • Sesi: ${CFG.sessionId}`;if(!window.opener)setStatus('Scanner dibuka tanpa aplikasi utama. Buka scanner dari tombol di aplikasi absensi.','warn');});
 window.addEventListener('pagehide',()=>stopCamera(false));
-document.addEventListener('visibilitychange',()=>{if(document.hidden)stopCamera(false);});
 </script>
 </body>
 </html>
