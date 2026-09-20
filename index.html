@@ -53,7 +53,7 @@ async function startCamera(){
     setStatus('Meminta izin kamera dari browser...');
     getGps();
     scanner=new Html5Qrcode('reader');
-    await scanner.start({facingMode:{ideal:facing}},{fps:10,qrbox:{width:Math.min(280,Math.floor(window.innerWidth*.62)),height:Math.min(280,Math.floor(window.innerWidth*.62))},aspectRatio:1},onQr,()=>{});
+    await scanner.start({facingMode:facing},{fps:10,qrbox:{width:Math.min(280,Math.floor(window.innerWidth*.62)),height:Math.min(280,Math.floor(window.innerWidth*.62))},aspectRatio:1},onQr,()=>{});
     updateFlash();
     setStatus(facing==='environment'?'Kamera belakang aktif. Arahkan QR ke kotak pemindai.':'Kamera depan aktif. Arahkan QR ke kotak pemindai.','ok');
   }catch(e){
