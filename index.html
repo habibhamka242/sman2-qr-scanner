@@ -32,7 +32,7 @@
 'use strict';
 const P=new URLSearchParams(location.search);
 const CFG={jadwalId:P.get('jadwalId')||'',userId:P.get('userId')||'',userName:P.get('userName')||'',role:P.get('role')||'',sessionId:P.get('sessionId')||'',school:P.get('school')||'SMAN 2 PAYAKUMBUH'};
-let scanner=null,facing='environment',torch=false,busy=false,lastQr='',lastAt=0,gps=null;
+let scanner=null,facing='environment',cameraId='',cameraList=[],torch=false,busy=false,lastQr='',lastAt=0,gps=null;
 const $=id=>document.getElementById(id);
 function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
 function setStatus(msg,type=''){ $('status').textContent=msg; $('status').className='status '+type; }
@@ -53,7 +53,16 @@ async function startCamera(){
     setStatus('Meminta izin kamera dari browser...');
     getGps();
     scanner=new Html5Qrcode('reader');
-    await scanner.start({facingMode:facing},{fps:10,qrbox:{width:Math.min(280,Math.floor(window.innerWidth*.62)),height:Math.min(280,Math.floor(window.innerWidth*.62))},aspectRatio:1},onQr,()=>{});
+    // Do NOT pass facingMode to html5-qrcode. Some versions require a plain
+    // cameraId string and otherwise throw: "facingMode should be string or object with exact as key".
+    cameraList=await Html5Qrcode.getCameras();
+    if(!cameraList || !cameraList.length) throw new Error('Kamera tidak ditemukan.');
+    const preferred=facing==='environment'
+      ? cameraList.find(c=>/back|rear|environment|belakang/i.test(c.label))
+      : cameraList.find(c=>/front|user|face|depan/i.test(c.label));
+    const chosen=preferred || cameraList[0];
+    cameraId=chosen.id;
+    await scanner.start(cameraId,{fps:10,qrbox:{width:Math.min(280,Math.floor(window.innerWidth*.62)),height:Math.min(280,Math.floor(window.innerWidth*.62))},aspectRatio:1},onQr,()=>{});
     updateFlash();
     setStatus(facing==='environment'?'Kamera belakang aktif. Arahkan QR ke kotak pemindai.':'Kamera depan aktif. Arahkan QR ke kotak pemindai.','ok');
   }catch(e){
@@ -62,6 +71,7 @@ async function startCamera(){
     else if(n==='NotFoundError'||/camera.*not found/i.test(m))msg='Kamera tidak ditemukan pada perangkat ini.';
     else if(n==='NotReadableError'||/could not start video source/i.test(m))msg='Kamera sedang dipakai aplikasi lain. Tutup aplikasi kamera lain lalu coba lagi.';
     else if(n==='OverconstrainedError')msg='Kamera yang dipilih tidak tersedia. Tekan Ganti Kamera.';
+    else if(/facingMode.*should be string|exact as key/i.test(m))msg='Konfigurasi kamera lama terdeteksi. Versi ini sudah menggunakan ID kamera langsung; refresh halaman GitHub Pages dan coba lagi.';
     else if(location.protocol!=='https:')msg='Scanner harus dibuka melalui HTTPS.';
     setStatus('Kamera gagal: '+msg,'err');
   }
